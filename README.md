@@ -1,6 +1,6 @@
 # 🔎 Multi-Agent Research Assistant
 
-A multi-agent AI system that researches any topic on the web, reads the best sources, writes a structured report, and then critiques its own work, all from a simple Streamlit UI.
+A multi-agent AI system that researches any topic on the web, reads the best sources, writes a structured report, and then critiques its own work, all from a ChatGPT-style Streamlit chat UI with live streaming responses.
 
 Built with **LangChain**, **Ollama**, **Tavily**, and **Streamlit**.
 
@@ -43,7 +43,7 @@ The search and reader steps are **tool-using agents** (`create_agent`), so the L
 | Layer | Tools |
 |-------|-------|
 | Agents & chains | [LangChain](https://python.langchain.com/) |
-| LLM | [Ollama](https://ollama.com/) (`gemma4:31b-cloud`; any Ollama model works) |
+| LLM | [Ollama](https://ollama.com/) (`llama3.2:3b`, runs fully locally; any Ollama model works) |
 | Web search | [Tavily](https://tavily.com/) |
 | Scraping | trafilatura, readability-lxml, BeautifulSoup |
 | Frontend | [Streamlit](https://streamlit.io/) |
@@ -59,10 +59,10 @@ multi-agents/
 │   ├── agent/
 │   │   └── agents.py        # LLM setup, search & reader agents, writer & critic chains
 │   ├── pipelines/
-│   │   └── pipeline.py      # run_research_pipeline(): orchestrates the 4 steps
+│   │   └── pipeline.py      # gather_research() (steps 1-2) + run_research_pipeline() (all 4 steps)
 │   ├── tools/
 │   │   └── tools.py         # web_search (Tavily) and scrape_url tools
-│   ├── app.py               # Streamlit frontend
+│   ├── app.py               # Streamlit chat UI (streams the report + critique)
 │   └── main.py              # CLI entry point for quick testing
 ├── pyproject.toml           # makes `src` an installable package
 ├── requirements.txt
@@ -93,11 +93,10 @@ pip install -r requirements.txt  # also installs this project in editable mode
 ### 2. Set up the model
 
 ```bash
-ollama signin                    # needed for cloud models like gemma4:31b-cloud
-ollama pull gemma4:31b-cloud
+ollama pull llama3.2:3b
 ```
 
-> To use a different model, change the `model=` value in `src/agent/agents.py`, for example to `llama3.2:3b` to run fully locally.
+> To use a different model, change the `model=` value in `src/agent/agents.py`. Models ending in `-cloud` (e.g. `gemma4:31b-cloud`) run on Ollama's servers, not your machine: they need `ollama signin` and Ollama usage credits (otherwise you get a `402` error).
 
 ### 3. Add your API key
 
@@ -115,7 +114,21 @@ TAVILY_API_KEY=your_tavily_api_key
 streamlit run src/app.py
 ```
 
-Open http://localhost:8501, enter a topic, and click **Run research**.
+Open http://localhost:8501 and type a topic in the chat box.
+
+- A status box shows live progress while the search and reader agents work (~1 min).
+- The report then **streams in word by word**, followed by the critic's feedback.
+- Search results and scraped content are available in expandable sections under each answer.
+
+#### How streaming works
+
+The writer and critic are LangChain chains, so they support `.stream()` (yields text chunks) as well as `.invoke()` (returns the full text at the end). The app passes the stream to `st.write_stream()`, which renders chunks as they arrive and returns the full text:
+
+```python
+state = gather_research(topic)   # steps 1-2: agents (tool calls, not streamed)
+report = st.write_stream(writer_chain.stream({"topic": topic, "research": state["research"]}))
+feedback = st.write_stream(critic_chain.stream({"report": report}))
+```
 
 **Command line**
 
@@ -152,7 +165,7 @@ print(state["feedback"])
 
 - [ ] Feed the critic's feedback back to the writer (self-improvement loop)
 - [ ] Scrape multiple sources instead of one
-- [ ] Stream each agent's progress live in the UI
+- [x] Stream the report and critique live in a chat UI
 - [ ] Expose the pipeline as a FastAPI endpoint
 - [ ] Export reports as PDF / Markdown
 

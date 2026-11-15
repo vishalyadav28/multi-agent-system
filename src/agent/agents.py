@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Model Initialization
-llm = ChatOllama(model = "gemma4:31b-cloud",temperature=0)
+llm = ChatOllama(model = "llama3.2:3b",temperature=0)
 
 
 # 1st Agent : Search Agent

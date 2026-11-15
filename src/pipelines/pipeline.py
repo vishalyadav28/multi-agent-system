@@ -1,7 +1,8 @@
 from src.agent.agents import build_search_agent, build_reader_agent, writer_chain, critic_chain
 
 
-def run_research_pipeline(topic : str) -> dict:
+def gather_research(topic : str, on_step=lambda msg: None) -> dict:
+    """Steps 1-2 (search + read). Split out so the UI can stream steps 3-4."""
 
     state = {}
 
@@ -10,6 +11,7 @@ def run_research_pipeline(topic : str) -> dict:
     print("step 1 - search agent is working ...")
     print("="*50)
 
+    on_step("🔍 Step 1/2 - Searching the web...")
     search_agent = build_search_agent()
     search_result = search_agent.invoke({
         "messages" : [("user", f"Find recent, reliable and detailed information about: {topic}")]
@@ -24,6 +26,7 @@ def run_research_pipeline(topic : str) -> dict:
     print("step 2 - Reader agent is scraping top resources ...")
     print("="*50)
 
+    on_step("📖 Step 2/2 - Reading the top source...")
     reader_agent = build_reader_agent()
     reader_result = reader_agent.invoke({
         "messages": [("user",
@@ -37,21 +40,27 @@ def run_research_pipeline(topic : str) -> dict:
 
     print("\nscraped content: \n", state['scraped_content'])
 
+    state["research"] = (
+        f"SEARCH RESULTS : \n {state['search_results']} \n\n"
+        f"DETAILED SCRAPED CONTENT : \n {state['scraped_content']}"
+    )
 
-    #step 3 - writer chain 
+    return state
+
+
+def run_research_pipeline(topic : str) -> dict:
+
+    state = gather_research(topic)
+
+    #step 3 - writer chain
 
     print("\n"+" ="*50)
     print("step 3 - Writer is drafting the report ...")
     print("="*50)
 
-    research_combined = (
-        f"SEARCH RESULTS : \n {state['search_results']} \n\n"
-        f"DETAILED SCRAPED CONTENT : \n {state['scraped_content']}"
-    )
-
     state["report"] = writer_chain.invoke({
         "topic" : topic,
-        "research" : research_combined
+        "research" : state["research"]
     })
 
     print("\n Final Report\n",state['report'])
